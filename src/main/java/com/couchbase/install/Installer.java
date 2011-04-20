@@ -12,7 +12,13 @@ import com.couchbase.install.internal.CouchbaseSSH;
 public class Installer {
 	private static final Logger LOG = LoggerFactory.getLogger(Installer.class);
 	private static final String WLOC = "http://builds.hq.northscale.net/releases/1.6.5/";
-	private static final String LLOC = "http://builds.hq.northscale.net/latestbuilds/";	
+	private static final String LLOC = "http://builds.hq.northscale.net/latestbuilds/";
+	private static final String MCMD = "/opt/moxi/bin/moxi -Z usr=Administrator,pwd=password,port_listen=11211," +
+		"default_bucket_name=default,downstream_max=1024,downstream_conn_max=16,connect_max_errors=5," +
+		"connect_retry_interval=30000,connect_timeout=400,auth_timeout=100,cycle=200," +
+		"downstream_conn_queue_timeout=200,downstream_timeout=5000,wait_queue_timeout=200 -z " +
+		"url=http://10.2.1.16:8091/pools/default/saslBucketsStreaming -p 0 -O stderr -u root -d";
+	
 	private String user;
 	private String pass;
 	private String host;
@@ -31,7 +37,7 @@ public class Installer {
 	public void installMoxi() throws InstallFailedException {
 		try {
 			CouchbaseSSH ssh = new CouchbaseSSH(user, pass, host);
-			ssh.docommand("rm -rf " + sVersion + "*");
+			ssh.docommand("rm -rf " + mVersion + "*");
 			if (!ssh.docommand("wget " + LLOC + mVersion).contains("`" + mVersion + "' saved")) {
 				ssh.docommand("rm -rf " + mVersion + "*");
 				ssh.closeSession();
@@ -56,6 +62,7 @@ public class Installer {
 				ssh.closeSession();
 				throw new InstallFailedException("Error installing" + sVersion + " on " + host + ". Doesn't appear to be linux package");
 			}
+			ssh.docommand(MCMD + " &");
 			ssh.docommand("rm -rf " + mVersion + "*");
 			ssh.closeSession();
 		} catch (SSHException e) {
@@ -147,6 +154,7 @@ public class Installer {
 		ssh.docommand("rm -rf /var/opt/membase");
 		ssh.docommand("rm -rf /etc/opt/membase");
 		ssh.docommand("rm -rf /opt/membase*");
+		ssh.docommand("pkill epmd");
 		ssh.closeSession();
 	}
 	
@@ -174,6 +182,7 @@ public class Installer {
 		} else if (sVersion.endsWith(".exe")) {
 			LOG.info("No Windows uninstall support");
 		}
+		ssh.docommand("pkill moxi");
 		ssh.closeSession();
 	}
 	
@@ -181,9 +190,12 @@ public class Installer {
 		Installer installer = new Installer("root", "northscale!23", "10.2.1.54", "membase-server-enterprise_x86_64_1.6.5.deb", "moxi-server_x86_64.deb");
 		try {
 			installer.installMoxi();
+			installer.uninstallMoxi();
 		} catch (InstallFailedException e) {
 			System.out.println("Install failed: " + e.getMessage());
+		} catch (UninstallFailedException e) {
+			System.out.println("Uninstall failed: " + e.getMessage());
 		}
-		//installer.uninstallMoxi();
+		
 	}
 }
